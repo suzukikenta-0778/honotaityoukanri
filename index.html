@@ -67,10 +67,13 @@ h1{font-size:18px;margin:0;font-weight:700}
 .blank{min-height:60px}
 .legend{font-size:12px;color:var(--muted);margin:8px 2px 0}
 .listwrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:520px;font-size:13px}
+table{border-collapse:collapse;width:100%;min-width:700px;font-size:13px}
 th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
 th{font-size:12px;color:var(--muted);background:var(--accent-soft)}
-td.memo{text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+th.memo,td.memo{min-width:220px}
+td.memo{text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}
+th.ext,td.ext{min-width:84px}
+td.ext{white-space:normal;font-size:12px;line-height:1.4}
 tr[data-k]{cursor:pointer}
 tr.sel td{background:var(--accent-soft)}
 td.bad{background:var(--warn-bg);color:var(--warn-ink);font-weight:700}
@@ -87,6 +90,11 @@ td.bad{background:var(--warn-bg);color:var(--warn-ink);font-weight:700}
 .tin:focus-within{outline:3px solid var(--accent);outline-offset:2px}
 .tin.hot{border-color:var(--warn-line);background:var(--warn-bg)}
 .hint{font-size:12px;color:var(--warn-ink);min-height:16px}
+.exrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;align-items:center;margin-top:8px}
+.exrow .tin input{font-size:20px;min-height:46px}
+.exdel{padding:0;min-height:46px}
+.exrow .tin{padding:0 8px}
+.exrow input[type=time]{font-size:17px}
 .seg{display:flex;gap:8px}
 .seg button{flex:1;min-height:46px;border:1px solid var(--line);background:var(--bg);border-radius:10px;cursor:pointer;font-weight:700}
 .seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
@@ -159,7 +167,7 @@ window.FIREBASE_CONFIG = {
   </section>
   <section id="view-list" class="listwrap" hidden>
     <table>
-      <thead><tr><th>日</th><th>朝℃</th><th>夜℃</th><th>元気</th><th>咳</th><th>鼻水</th><th>食欲</th><th>いつもと</th><th>メモ</th></tr></thead>
+      <thead><tr><th>日</th><th>朝℃</th><th>夜℃</th><th class="ext">追加測定</th><th>元気</th><th>咳</th><th>鼻水</th><th>食欲</th><th>いつもと</th><th class="memo">メモ</th></tr></thead>
       <tbody id="tbody"></tbody>
     </table>
   </section>
@@ -181,6 +189,11 @@ window.FIREBASE_CONFIG = {
       </div>
     </div>
     <div class="hint" id="temphint"></div>
+    <div class="field">
+      <span class="lab" id="lab-extra">追加の体温（発熱時など）</span>
+      <div id="extras" role="group" aria-labelledby="lab-extra"></div>
+      <button type="button" class="btn" id="addextra" style="width:100%;margin-top:8px">＋ 体温と時刻を追加</button>
+    </div>
     <div id="choices" style="display:flex;flex-direction:column;gap:12px"></div>
     <div class="field">
       <label for="memo">メモ</label>
@@ -218,6 +231,7 @@ window.FIREBASE_CONFIG = {
   function parseKey(k){var p=k.split('-');return {y:+p[0],m:+p[1],d:+p[2]}}
   function dayLabel(k){var p=parseKey(k);var w=new Date(p.y,p.m-1,p.d).getDay();return p.m+'月'+p.d+'日（'+WD[w]+'）'}
   function num(v){var n=parseFloat(v);return isFinite(n)?n:null}
+  function exList(d){return (d&&Array.isArray(d.extra))?d.extra.filter(function(x){return x&&typeof x==='object'}):[]}
   function norm(s){
     return String(s).replace(/[０-９]/g,function(c){return String.fromCharCode(c.charCodeAt(0)-0xFEE0)}).replace(/[．。，,]/g,'.').replace(/[^0-9.]/g,'');
   }
@@ -225,17 +239,19 @@ window.FIREBASE_CONFIG = {
     if(!d) return false;
     var a=num(d.am),p=num(d.pm);
     if((a!==null&&a>=37.5)||(p!==null&&p>=37.5)) return true;
+    if(exList(d).some(function(x){var v=num(x.v);return v!==null&&v>=37.5})) return true;
     return CH.some(function(c){return d[c.f]===c.bad});
   }
   function recorded(d){
     if(!d) return false;
-    return !!(d.am||d.pm||d.memo||CH.some(function(c){return d[c.f]}));
+    return !!(d.am||d.pm||d.memo||CH.some(function(c){return d[c.f]})||exList(d).some(function(x){return x.v}));
   }
   function maxTemp(d){
     if(!d) return null;
     var a=num(d.am),p=num(d.pm);
-    if(a===null&&p===null) return null;
-    return Math.max(a===null?-1:a,p===null?-1:p);
+    var vals=[a,p].concat(exList(d).map(function(x){return num(x.v)})).filter(function(v){return v!==null});
+    if(!vals.length) return null;
+    return Math.max.apply(null,vals);
   }
   function setStatus(t,err){var s=$('status');s.textContent=t;s.className='status'+(err?' err':'')}
   function showBanner(t){var b=$('banner');if(t){b.textContent=t;b.hidden=false}else{b.hidden=true}}
@@ -310,9 +326,13 @@ window.FIREBASE_CONFIG = {
       k=keyOf(state.y,state.m,i); d=state.docs[k]||{};
       var wd=WD[new Date(state.y,state.m-1,i).getDay()];
       var a=num(d.am),p=num(d.pm);
+      var ex=exList(d).filter(function(x){return x.v}).sort(function(x,y){return String(x.t||'').localeCompare(String(y.t||''))});
+      var exHot=ex.some(function(x){var v=num(x.v);return v!==null&&v>=37.5});
+      var exHtml=ex.map(function(x){return esc((x.t||'--:--')+' '+x.v)}).join('<br>');
       rows+='<tr data-k="'+k+'" tabindex="0" class="'+(k===state.sel?'sel':'')+'"><td>'+i+'（'+wd+'）</td>'
         +'<td class="'+(a!==null&&a>=37.5?'bad':'')+'">'+esc(d.am||'')+'</td>'
         +'<td class="'+(p!==null&&p>=37.5?'bad':'')+'">'+esc(d.pm||'')+'</td>'
+        +'<td class="ext'+(exHot?' bad':'')+'">'+exHtml+'</td>'
         +CH.map(function(c){return '<td class="'+(d[c.f]===c.bad?'bad':'')+'">'+esc(d[c.f]||'')+'</td>'}).join('')
         +'<td class="memo">'+esc(d.memo||'')+'</td></tr>';
     }
@@ -349,7 +369,19 @@ window.FIREBASE_CONFIG = {
     });
     tempHints();
   }
-  function renderAll(){renderMonth();fillEditor()}
+  function renderExtras(){
+    var box=$('extras'), list=exList(state.docs[state.sel]);
+    if(box.contains(document.activeElement)&&box.children.length===list.length) return;
+    box.innerHTML=list.map(function(x,i){
+      var n=num(x.v), hot=n!==null&&n>=37.5;
+      return '<div class="exrow">'
+        +'<div class="tin"><input type="time" data-i="'+i+'" data-x="t" aria-label="'+(i+1)+'件目の測定時刻" value="'+esc(x.t||'')+'"></div>'
+        +'<div class="tin'+(hot?' hot':'')+'"><input type="text" inputmode="decimal" autocomplete="off" data-i="'+i+'" data-x="v" aria-label="'+(i+1)+'件目の体温" value="'+esc(x.v||'')+'"><span>℃</span></div>'
+        +'<button type="button" class="btn exdel" data-i="'+i+'" aria-label="'+(i+1)+'件目を削除">✕</button></div>';
+    }).join('');
+  }
+  function copyExtras(){return exList(state.docs[state.sel]).map(function(x){return {t:x.t||'',v:x.v||''}})}
+  function renderAll(){renderMonth();fillEditor();renderExtras()}
 
   /* ---------- saving ---------- */
   function queue(k,patch,immediate){
@@ -440,6 +472,33 @@ window.FIREBASE_CONFIG = {
     });
   });
   $('memo').addEventListener('input',function(){queue(state.sel,{memo:$('memo').value},false)});
+  $('addextra').addEventListener('click',function(){
+    var cur=copyExtras();
+    if(cur.length>=20) return;
+    var n=new Date();
+    cur.push({t:pad(n.getHours())+':'+pad(n.getMinutes()),v:''});
+    queue(state.sel,{extra:cur},true);
+    renderExtras();
+    var ins=$('extras').querySelectorAll('input[data-x="v"]');
+    if(ins.length) ins[ins.length-1].focus();
+  });
+  $('extras').addEventListener('click',function(e){
+    var b=e.target.closest('button[data-i]'); if(!b) return;
+    var cur=copyExtras(); cur.splice(+b.getAttribute('data-i'),1);
+    queue(state.sel,{extra:cur},true);
+    renderExtras();
+  });
+  $('extras').addEventListener('input',function(e){
+    var el=e.target, f=el.getAttribute('data-x'); if(!f) return;
+    var i=+el.getAttribute('data-i'), val=el.value;
+    if(f==='v'){
+      var nv=norm(val); if(nv!==val){el.value=nv;val=nv}
+      var n=num(val); el.closest('.tin').classList.toggle('hot',n!==null&&n>=37.5);
+    }
+    var cur=copyExtras(); if(!cur[i]) return;
+    cur[i][f]=val;
+    queue(state.sel,{extra:cur},false);
+  });
   $('editor').addEventListener('focusout',function(){flush(state.sel)});
   document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden') flushAll()});
   window.addEventListener('pagehide',flushAll);
