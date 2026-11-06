@@ -67,12 +67,28 @@ h1{font-size:18px;margin:0;font-weight:700}
 .blank{min-height:60px}
 .legend{font-size:12px;color:var(--muted);margin:8px 2px 0}
 .listwrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:700px;font-size:13px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
 th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
 th{font-size:12px;color:var(--muted);background:var(--accent-soft)}
+thead tr.sub th{border-top:1px solid var(--line)}
+.gseg{margin-bottom:8px}
+.gseg button{min-height:40px;font-size:13px}
+#gwrap svg{display:block;width:100%;height:auto}
+.g-grid{stroke:var(--line);stroke-width:1}
+.g-ref{stroke:var(--warn-line);stroke-width:1.3;stroke-dasharray:4 3}
+.g-line{fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linejoin:round}
+.g-txt{fill:var(--muted);font-size:10px;font-family:var(--font)}
+.g-reftxt{fill:var(--warn-ink);font-size:10px;font-family:var(--font);font-weight:700}
+.g-pt{fill:var(--accent);stroke:var(--surface);stroke-width:1}
+.g-pt.hot{fill:var(--warn-line);stroke:var(--warn-ink)}
+.g-sel{fill:none;stroke:var(--ink);stroke-width:1.6}
+#gwrap g[data-p]{cursor:pointer}
+.gdetail{margin-top:8px;padding:10px 12px;background:var(--accent-soft);border-radius:10px;font-size:13px;min-height:40px;overflow-wrap:anywhere}
+.sect{margin:4px 0 -4px;padding-top:12px;border-top:1px solid var(--line);font-size:15px}
+.sect small{margin-left:8px;font-size:12px;font-weight:400;color:var(--muted)}
 th.memo,td.memo{min-width:220px}
 td.memo{text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}
-th.ext,td.ext{min-width:84px}
+th.ext,td.ext{min-width:150px}
 td.ext{white-space:normal;font-size:12px;line-height:1.4}
 tr[data-k]{cursor:pointer}
 tr.sel td{background:var(--accent-soft)}
@@ -90,7 +106,9 @@ td.bad{background:var(--warn-bg);color:var(--warn-ink);font-weight:700}
 .tin:focus-within{outline:3px solid var(--accent);outline-offset:2px}
 .tin.hot{border-color:var(--warn-line);background:var(--warn-bg)}
 .hint{font-size:12px;color:var(--warn-ink);min-height:16px}
-.exrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;align-items:center;margin-top:8px}
+.exrow{margin-top:10px;padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.exline{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;align-items:center}
+.exmemo{display:block;width:100%;margin-top:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:0 12px;min-height:46px;font-size:16px}
 .exrow .tin input{font-size:20px;min-height:46px}
 .exdel{padding:0;min-height:46px}
 .exrow .tin{padding:0 8px}
@@ -158,6 +176,7 @@ window.FIREBASE_CONFIG = {
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-cal" aria-selected="true" data-tab="cal">カレンダー</button>
     <button role="tab" id="tab-list" aria-selected="false" data-tab="list">一覧</button>
+    <button role="tab" id="tab-graph" aria-selected="false" data-tab="graph">グラフ</button>
   </div>
 
   <section id="view-cal" class="cal">
@@ -167,9 +186,20 @@ window.FIREBASE_CONFIG = {
   </section>
   <section id="view-list" class="listwrap" hidden>
     <table>
-      <thead><tr><th>日</th><th>朝℃</th><th>夜℃</th><th class="ext">追加測定</th><th>元気</th><th>咳</th><th>鼻水</th><th>食欲</th><th>いつもと</th><th class="memo">メモ</th></tr></thead>
+      <thead><tr><th rowspan="2">日</th><th rowspan="2">朝℃</th><th rowspan="2">夜℃</th><th rowspan="2" class="ext">追加測定</th><th colspan="5">朝の様子</th><th rowspan="2" class="memo">メモ</th></tr><tr class="sub"><th>元気</th><th>咳</th><th>鼻水</th><th>食欲</th><th>いつもと</th></tr></thead>
       <tbody id="tbody"></tbody>
     </table>
+  </section>
+
+  <section id="view-graph" class="cal" hidden>
+    <div class="seg gseg" role="group" aria-label="表示期間">
+      <button type="button" data-g="month" aria-pressed="true">この月</button>
+      <button type="button" data-g="week" aria-pressed="false">選択日までの7日間</button>
+    </div>
+    <div id="gwrap"></div>
+    <p class="legend">● 朝　■ 夜　▲ 追加測定　点線は37.5℃の目安です。オレンジの点は37.5℃以上です。</p>
+    <p class="legend" id="gnote"></p>
+    <div class="gdetail" id="gdetail" aria-live="polite">点をタップすると、時刻とメモが出ます。</div>
   </section>
 
   <section class="editor" id="editor" aria-label="日ごとの記入">
@@ -194,6 +224,7 @@ window.FIREBASE_CONFIG = {
       <div id="extras" role="group" aria-labelledby="lab-extra"></div>
       <button type="button" class="btn" id="addextra" style="width:100%;margin-top:8px">＋ 体温と時刻を追加</button>
     </div>
+    <h3 class="sect">朝の様子<small>朝の時点の状態を記入します</small></h3>
     <div id="choices" style="display:flex;flex-direction:column;gap:12px"></div>
     <div class="field">
       <label for="memo">メモ</label>
@@ -225,7 +256,7 @@ window.FIREBASE_CONFIG = {
 
   var now=new Date();
   var todayKey=keyOf(now.getFullYear(),now.getMonth()+1,now.getDate());
-  var state={y:now.getFullYear(),m:now.getMonth()+1,sel:todayKey,docs:{},tab:'cal'};
+  var state={y:now.getFullYear(),m:now.getMonth()+1,sel:todayKey,docs:{},tab:'cal',grange:'month'};
   var store=null, pending={}, firstSnap=false, slow=0;
 
   function parseKey(k){var p=k.split('-');return {y:+p[0],m:+p[1],d:+p[2]}}
@@ -244,7 +275,7 @@ window.FIREBASE_CONFIG = {
   }
   function recorded(d){
     if(!d) return false;
-    return !!(d.am||d.pm||d.memo||CH.some(function(c){return d[c.f]})||exList(d).some(function(x){return x.v}));
+    return !!(d.am||d.pm||d.memo||CH.some(function(c){return d[c.f]})||exList(d).some(function(x){return x.v||x.m}));
   }
   function maxTemp(d){
     if(!d) return null;
@@ -326,9 +357,9 @@ window.FIREBASE_CONFIG = {
       k=keyOf(state.y,state.m,i); d=state.docs[k]||{};
       var wd=WD[new Date(state.y,state.m-1,i).getDay()];
       var a=num(d.am),p=num(d.pm);
-      var ex=exList(d).filter(function(x){return x.v}).sort(function(x,y){return String(x.t||'').localeCompare(String(y.t||''))});
+      var ex=exList(d).filter(function(x){return x.v||x.m}).sort(function(x,y){return String(x.t||'').localeCompare(String(y.t||''))});
       var exHot=ex.some(function(x){var v=num(x.v);return v!==null&&v>=37.5});
-      var exHtml=ex.map(function(x){return esc((x.t||'--:--')+' '+x.v)}).join('<br>');
+      var exHtml=ex.map(function(x){return esc([x.t||'--:--',x.v||'',x.m||''].filter(Boolean).join(' '))}).join('<br>');
       rows+='<tr data-k="'+k+'" tabindex="0" class="'+(k===state.sel?'sel':'')+'"><td>'+i+'（'+wd+'）</td>'
         +'<td class="'+(a!==null&&a>=37.5?'bad':'')+'">'+esc(d.am||'')+'</td>'
         +'<td class="'+(p!==null&&p>=37.5?'bad':'')+'">'+esc(d.pm||'')+'</td>'
@@ -337,6 +368,78 @@ window.FIREBASE_CONFIG = {
         +'<td class="memo">'+esc(d.memo||'')+'</td></tr>';
     }
     $('tbody').innerHTML=rows;
+    if(state.tab==='graph') renderGraph();
+  }
+  var gsig='';
+  function renderGraph(){
+    var n,start,sp=parseKey(state.sel);
+    if(state.grange==='week'){n=7;start=new Date(sp.y,sp.m-1,sp.d-6)}
+    else{n=new Date(state.y,state.m,0).getDate();start=new Date(state.y,state.m-1,1)}
+    var okv=function(v){return v!==null&&v>=30&&v<=45};
+    var pts=[];
+    for(var i=0;i<n;i++){
+      var dt=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i);
+      var k=keyOf(dt.getFullYear(),dt.getMonth()+1,dt.getDate()), d=state.docs[k];
+      if(!d) continue;
+      var md=(dt.getMonth()+1)+'/'+dt.getDate();
+      var a=num(d.am); if(okv(a)) pts.push({x:i+0.3,v:a,kind:'am',label:md+' 朝',k:k,memo:''});
+      var pv=num(d.pm); if(okv(pv)) pts.push({x:i+0.85,v:pv,kind:'pm',label:md+' 夜',k:k,memo:''});
+      exList(d).forEach(function(e){
+        var v=num(e.v); if(!okv(v)) return;
+        var m=/^(\d{1,2}):(\d{2})$/.exec(e.t||'');
+        var f=m?(+m[1]*60+ +m[2])/1440:0.5;
+        pts.push({x:i+Math.min(0.98,f),v:v,kind:'ex',label:md+' 追加'+(e.t?' '+e.t:''),k:k,memo:e.m||''});
+      });
+    }
+    pts.sort(function(p,q){return p.x-q.x});
+    var W=360,H=240,L=34,R=10,T=12,B=28,pw=W-L-R,ph=H-T-B;
+    var lo=35.5,hi=38.5;
+    if(pts.length){
+      var mn=Math.min.apply(null,pts.map(function(p){return p.v})), mx=Math.max.apply(null,pts.map(function(p){return p.v}));
+      lo=Math.min(lo,Math.floor((mn-0.2)*2)/2); hi=Math.max(hi,Math.ceil((mx+0.2)*2)/2);
+    }
+    var X=function(x){return L+x/n*pw}, Y=function(v){return T+(hi-v)/(hi-lo)*ph};
+    var step=(hi-lo)>3.5?1:0.5, out='';
+    for(var g=Math.ceil(lo/step)*step;g<=hi+1e-9;g+=step){
+      out+='<line class="g-grid" x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(g).toFixed(1)+'" y2="'+Y(g).toFixed(1)+'"/>'
+        +'<text class="g-txt" x="'+(L-5)+'" y="'+(Y(g)+3.5).toFixed(1)+'" text-anchor="end">'+g.toFixed(1)+'</text>';
+    }
+    out+='<line class="g-ref" x1="'+L+'" x2="'+(W-R)+'" y1="'+Y(37.5).toFixed(1)+'" y2="'+Y(37.5).toFixed(1)+'"/>';
+    for(var j=0;j<n;j++){
+      var dd=new Date(start.getFullYear(),start.getMonth(),start.getDate()+j), dom=dd.getDate();
+      var show=(state.grange==='week')||dom===1||dom%5===0;
+      if(show) out+='<text class="g-txt" x="'+X(j+0.5).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle">'+(state.grange==='week'?(dd.getMonth()+1)+'/'+dom:dom)+'</text>';
+    }
+    var segs=[],cur=[];
+    pts.forEach(function(p){
+      if(cur.length&&p.x-cur[cur.length-1].x>1.6){segs.push(cur);cur=[]}
+      cur.push(p);
+    });
+    if(cur.length) segs.push(cur);
+    segs.forEach(function(sg){
+      if(sg.length>1) out+='<polyline class="g-line" points="'+sg.map(function(p){return X(p.x).toFixed(1)+','+Y(p.v).toFixed(1)}).join(' ')+'"/>';
+    });
+    var selText='';
+    pts.forEach(function(p,idx){
+      var cx=X(p.x).toFixed(1), cy=Y(p.v).toFixed(1), c='g-pt'+(p.v>=37.5?' hot':''), sig=p.kind+'|'+p.k+'|'+p.x.toFixed(3), shape;
+      if(p.kind==='am') shape='<circle class="'+c+'" cx="'+cx+'" cy="'+cy+'" r="4.5"/>';
+      else if(p.kind==='pm') shape='<rect class="'+c+'" x="'+(cx-4)+'" y="'+(cy-4)+'" width="8" height="8"/>';
+      else shape='<polygon class="'+c+'" points="'+cx+','+(cy-5.5)+' '+(+cx+5)+','+(+cy+4)+' '+(cx-5)+','+(+cy+4)+'"/>';
+      out+='<g data-p="'+idx+'" data-sig="'+sig+'"><circle cx="'+cx+'" cy="'+cy+'" r="13" fill="transparent"/>'+shape
+        +(sig===gsig?'<circle class="g-sel" cx="'+cx+'" cy="'+cy+'" r="9"/>':'')+'</g>';
+      if(sig===gsig) selText=p.label+'　'+p.v.toFixed(1)+'℃'+(p.memo?'　'+p.memo:'');
+    });
+    var note='';
+    if(pts.length){
+      var top=pts.reduce(function(a,b){return b.v>a.v?b:a});
+      var hot=pts.filter(function(p){return p.v>=37.5}).length;
+      note='最高 '+top.v.toFixed(1)+'℃（'+top.label+'）／37.5℃以上の測定 '+hot+'回';
+    }else{
+      note='この期間に記録された体温はありません。';
+    }
+    $('gwrap').innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc('体温の推移。'+note)+'">'+out+'</svg>';
+    $('gnote').textContent=note;
+    $('gdetail').textContent=selText||'点をタップすると、時刻とメモが出ます。';
   }
   function buildEditor(){
     $('choices').innerHTML=CH.map(function(c){
@@ -369,18 +472,29 @@ window.FIREBASE_CONFIG = {
     });
     tempHints();
   }
+  var exDay=null;
   function renderExtras(){
     var box=$('extras'), list=exList(state.docs[state.sel]);
-    if(box.contains(document.activeElement)&&box.children.length===list.length) return;
+    if(exDay===state.sel&&box.children.length===list.length){
+      Array.prototype.forEach.call(box.querySelectorAll('input[data-x]'),function(inp){
+        var x=list[+inp.getAttribute('data-i')]; if(!x) return;
+        var f=inp.getAttribute('data-x');
+        if(inp!==document.activeElement&&inp.value!==(x[f]||'')) inp.value=x[f]||'';
+        if(f==='v'){var n=num(inp.value); inp.closest('.tin').classList.toggle('hot',n!==null&&n>=37.5)}
+      });
+      return;
+    }
+    exDay=state.sel;
     box.innerHTML=list.map(function(x,i){
       var n=num(x.v), hot=n!==null&&n>=37.5;
-      return '<div class="exrow">'
+      return '<div class="exrow"><div class="exline">'
         +'<div class="tin"><input type="time" data-i="'+i+'" data-x="t" aria-label="'+(i+1)+'件目の測定時刻" value="'+esc(x.t||'')+'"></div>'
         +'<div class="tin'+(hot?' hot':'')+'"><input type="text" inputmode="decimal" autocomplete="off" data-i="'+i+'" data-x="v" aria-label="'+(i+1)+'件目の体温" value="'+esc(x.v||'')+'"><span>℃</span></div>'
-        +'<button type="button" class="btn exdel" data-i="'+i+'" aria-label="'+(i+1)+'件目を削除">✕</button></div>';
+        +'<button type="button" class="btn exdel" data-i="'+i+'" aria-label="'+(i+1)+'件目を削除">✕</button></div>'
+        +'<input class="exmemo" type="text" autocomplete="off" data-i="'+i+'" data-x="m" aria-label="'+(i+1)+'件目の対応メモ" placeholder="対応メモ" value="'+esc(x.m||'')+'"></div>';
     }).join('');
   }
-  function copyExtras(){return exList(state.docs[state.sel]).map(function(x){return {t:x.t||'',v:x.v||''}})}
+  function copyExtras(){return exList(state.docs[state.sel]).map(function(x){return {t:x.t||'',v:x.v||'',m:x.m||''}})}
   function renderAll(){renderMonth();fillEditor();renderExtras()}
 
   /* ---------- saving ---------- */
@@ -434,9 +548,22 @@ window.FIREBASE_CONFIG = {
     state.tab=t;
     $('view-cal').hidden=t!=='cal';
     $('view-list').hidden=t!=='list';
+    $('view-graph').hidden=t!=='graph';
     $('tab-cal').setAttribute('aria-selected',String(t==='cal'));
     $('tab-list').setAttribute('aria-selected',String(t==='list'));
+    $('tab-graph').setAttribute('aria-selected',String(t==='graph'));
+    if(t==='graph') renderGraph();
   }
+  $('view-graph').addEventListener('click',function(e){
+    var gb=e.target.closest('button[data-g]');
+    if(gb){
+      state.grange=gb.getAttribute('data-g');
+      Array.prototype.forEach.call(document.querySelectorAll('button[data-g]'),function(b){b.setAttribute('aria-pressed',String(b===gb))});
+      gsig=''; renderGraph(); return;
+    }
+    var pt=e.target.closest('g[data-p]');
+    if(pt){gsig=pt.getAttribute('data-sig'); renderGraph()}
+  });
   $('prev').addEventListener('click',function(){shiftMonth(-1)});
   $('next').addEventListener('click',function(){shiftMonth(1)});
   $('dprev').addEventListener('click',function(){shiftDay(-1)});
@@ -476,7 +603,7 @@ window.FIREBASE_CONFIG = {
     var cur=copyExtras();
     if(cur.length>=20) return;
     var n=new Date();
-    cur.push({t:pad(n.getHours())+':'+pad(n.getMinutes()),v:''});
+    cur.push({t:pad(n.getHours())+':'+pad(n.getMinutes()),v:'',m:''});
     queue(state.sel,{extra:cur},true);
     renderExtras();
     var ins=$('extras').querySelectorAll('input[data-x="v"]');
