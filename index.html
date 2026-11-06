@@ -71,6 +71,25 @@ table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
 th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
 th{font-size:12px;color:var(--muted);background:var(--accent-soft)}
 thead tr.sub th{border-top:1px solid var(--line)}
+.showall{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin:0 2px 8px;min-height:36px}
+.showall input{width:20px;height:20px;accent-color:var(--accent)}
+.dlist{display:flex;flex-direction:column;gap:8px}
+.dcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-width:0}
+.dcard.sel{border:2px solid var(--accent);padding:9px 11px}
+.dcard.empty{background:transparent;flex-direction:row;align-items:center;justify-content:space-between;padding:8px 12px}
+.dcard.empty.sel{padding:7px 11px}
+.dh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dd{font-weight:700;font-size:15px}
+.dflag{font-size:12px;font-weight:700;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:999px;padding:0 10px}
+.dnone{font-size:12px;color:var(--muted)}
+.dtemps{display:flex;flex-wrap:wrap;gap:4px 20px;font-size:17px;font-variant-numeric:tabular-nums}
+.dtemps b,.dex b,.chiplab{font-size:12px;color:var(--muted);font-weight:700;margin-right:6px}
+.dt.bad,.dex.bad{color:var(--warn-ink);font-weight:700}
+.dex{font-size:14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:1px 10px;background:var(--bg)}
+.chip.bad{background:var(--warn-bg);border-color:var(--warn-line);color:var(--warn-ink);font-weight:700}
+.dmemo{font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;border-top:1px dashed var(--line);padding-top:6px}
 .gseg{margin-bottom:8px}
 .gseg button{min-height:40px;font-size:13px}
 #gwrap svg{display:block;width:100%;height:auto}
@@ -184,11 +203,9 @@ window.FIREBASE_CONFIG = {
     <div class="grid" id="grid"></div>
     <p class="legend">日付をタップして記入します。▲は気になる日（37.5℃以上、元気・食欲なし、咳・鼻水あり、いつもと違う）、○は記入済みです。</p>
   </section>
-  <section id="view-list" class="listwrap" hidden>
-    <table>
-      <thead><tr><th rowspan="2">日</th><th rowspan="2">朝℃</th><th rowspan="2">夜℃</th><th rowspan="2" class="ext">追加測定</th><th colspan="5">朝の様子</th><th rowspan="2" class="memo">メモ</th></tr><tr class="sub"><th>元気</th><th>咳</th><th>鼻水</th><th>食欲</th><th>いつもと</th></tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
+  <section id="view-list" hidden>
+    <label class="showall"><input type="checkbox" id="showall"> 記録のない日も表示する</label>
+    <div class="dlist" id="dlist"></div>
   </section>
 
   <section id="view-graph" class="cal" hidden>
@@ -352,22 +369,35 @@ window.FIREBASE_CONFIG = {
     $('grid').innerHTML=html;
     $('summary').innerHTML='<span>記入 '+rec+'日</span><span>気になる日 '+warn+'日</span>';
 
-    var rows='';
+    var showAll=$('showall').checked, cards='';
     for(i=1;i<=dim;i++){
       k=keyOf(state.y,state.m,i); d=state.docs[k]||{};
-      var wd=WD[new Date(state.y,state.m-1,i).getDay()];
-      var a=num(d.am),p=num(d.pm);
-      var ex=exList(d).filter(function(x){return x.v||x.m}).sort(function(x,y){return String(x.t||'').localeCompare(String(y.t||''))});
-      var exHot=ex.some(function(x){var v=num(x.v);return v!==null&&v>=37.5});
-      var exHtml=ex.map(function(x){return esc([x.t||'--:--',x.v||'',x.m||''].filter(Boolean).join(' '))}).join('<br>');
-      rows+='<tr data-k="'+k+'" tabindex="0" class="'+(k===state.sel?'sel':'')+'"><td>'+i+'（'+wd+'）</td>'
-        +'<td class="'+(a!==null&&a>=37.5?'bad':'')+'">'+esc(d.am||'')+'</td>'
-        +'<td class="'+(p!==null&&p>=37.5?'bad':'')+'">'+esc(d.pm||'')+'</td>'
-        +'<td class="ext'+(exHot?' bad':'')+'">'+exHtml+'</td>'
-        +CH.map(function(c){return '<td class="'+(d[c.f]===c.bad?'bad':'')+'">'+esc(d[c.f]||'')+'</td>'}).join('')
-        +'<td class="memo">'+esc(d.memo||'')+'</td></tr>';
+      var isRec=recorded(state.docs[k]), isWarn=concerns(state.docs[k]);
+      if(!isRec&&!showAll) continue;
+      var wdn=WD[new Date(state.y,state.m-1,i).getDay()];
+      var cls2='dcard'+(isRec?'':' empty')+(k===state.sel?' sel':'');
+      var head='<div class="dh"><span class="dd">'+i+'日（'+wdn+'）</span>'+(isWarn?'<span class="dflag">▲ 気になる</span>':'')+'</div>';
+      if(!isRec){
+        cards+='<div class="'+cls2+'" data-k="'+k+'" role="button" tabindex="0">'+head+'<span class="dnone">記録なし</span></div>';
+        continue;
+      }
+      var av=num(d.am), pvv=num(d.pm);
+      var temps='<div class="dtemps"><span class="dt'+(av!==null&&av>=37.5?' bad':'')+'"><b>朝</b>'+(d.am?esc(d.am)+'℃':'―')+'</span>'
+        +'<span class="dt'+(pvv!==null&&pvv>=37.5?' bad':'')+'"><b>夜</b>'+(d.pm?esc(d.pm)+'℃':'―')+'</span></div>';
+      var exs=exList(d).filter(function(x){return x.v||x.m}).sort(function(x,y){return String(x.t||'').localeCompare(String(y.t||''))});
+      var exh=exs.map(function(x){
+        var v=num(x.v);
+        return '<div class="dex'+(v!==null&&v>=37.5?' bad':'')+'"><b>追加</b>'+esc([x.t||'--:--',x.v?x.v+'℃':'',x.m||''].filter(Boolean).join('　'))+'</div>';
+      }).join('');
+      var chips=CH.map(function(c){
+        if(!d[c.f]) return '';
+        return '<span class="chip'+(d[c.f]===c.bad?' bad':'')+'">'+(c.f==='itsumo'?'いつもと':c.label)+' '+esc(d[c.f])+'</span>';
+      }).join('');
+      var memoH=d.memo?'<div class="dmemo">'+esc(d.memo)+'</div>':'';
+      cards+='<div class="'+cls2+'" data-k="'+k+'" role="button" tabindex="0">'+head+temps+exh
+        +(chips?'<div class="chips"><span class="chiplab">朝の様子</span>'+chips+'</div>':'')+memoH+'</div>';
     }
-    $('tbody').innerHTML=rows;
+    $('dlist').innerHTML=cards||'<p class="legend">この月の記録はまだありません。</p>';
     if(state.tab==='graph') renderGraph();
   }
   var gsig='';
@@ -575,12 +605,13 @@ window.FIREBASE_CONFIG = {
   $('grid').addEventListener('click',function(e){
     var b=e.target.closest('button[data-k]'); if(b) select(b.getAttribute('data-k'),true);
   });
-  $('tbody').addEventListener('click',function(e){
-    var r=e.target.closest('tr[data-k]'); if(r) select(r.getAttribute('data-k'),true);
+  $('dlist').addEventListener('click',function(e){
+    var r=e.target.closest('.dcard[data-k]'); if(r) select(r.getAttribute('data-k'),true);
   });
-  $('tbody').addEventListener('keydown',function(e){
-    if(e.key==='Enter'||e.key===' '){var r=e.target.closest('tr[data-k]'); if(r){e.preventDefault();select(r.getAttribute('data-k'),true)}}
+  $('dlist').addEventListener('keydown',function(e){
+    if(e.key==='Enter'||e.key===' '){var r=e.target.closest('.dcard[data-k]'); if(r){e.preventDefault();select(r.getAttribute('data-k'),true)}}
   });
+  $('showall').addEventListener('change',renderMonth);
   $('choices').addEventListener('click',function(e){
     var b=e.target.closest('button[data-f]'); if(!b) return;
     var f=b.getAttribute('data-f'), v=b.getAttribute('data-v');
